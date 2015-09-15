@@ -10,6 +10,7 @@ dependencies {
   // have to use output since we exclude the dependent classes from jar :(
   provided project(path: ':gemfire-core', configuration: 'classesOutput')
   
+  provided project(':gemfire-common')
   provided project(':gemfire-core')
 
   provided project(path: ':gemfire-junit', configuration: 'testOutput')
