@@ -41,6 +41,7 @@ rat {
     '**/.settings/**',
     '**/build-eclipse/**',
     '*.iml',
+    '**/*.iml',
     '.idea/**',
     '**/tags',
 
