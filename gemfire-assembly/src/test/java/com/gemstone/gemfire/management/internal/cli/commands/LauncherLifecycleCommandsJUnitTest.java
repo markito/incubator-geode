@@ -622,4 +622,38 @@ public class LauncherLifecycleCommandsJUnitTest {
         expectedCommandLineElements.isEmpty());
   }
 
+
+  @Test
+  public void testCreateServerWithRandomNameCommandLine() throws Exception {
+    ServerLauncher serverLauncher = new ServerLauncher.Builder().setCommand(
+            ServerLauncher.Command.START).setDisableDefaultServer(true).setRebalance(true)
+            //.setServerBindAddress("localhost")
+            .setServerPort(41214).setCriticalHeapPercentage(95.5f).setEvictionHeapPercentage(85.0f).build();
+
+    String[] commandLineElements = launcherCommands.createStartServerCommandLine(serverLauncher, null, null,
+            new Properties(), null, false, new String[0], false, null, null);
+
+    assertNotNull(commandLineElements);
+    assertTrue(commandLineElements.length > 0);
+
+    Set<String> expectedCommandLineElements = new HashSet<>(5);
+
+    expectedCommandLineElements.add("--disable-default-server");
+    expectedCommandLineElements.add(serverLauncher.getMemberName().toLowerCase());
+    expectedCommandLineElements.add("--rebalance");
+    //expectedCommandLineElements.add(String.format("--server-bind-address=%1$s", serverLauncher.getServerBindAddress().getHostName()));
+    expectedCommandLineElements.add(String.format("--server-port=%1$d", serverLauncher.getServerPort()));
+    expectedCommandLineElements.add(
+            String.format("--critical-heap-percentage=%1$s", serverLauncher.getCriticalHeapPercentage()));
+    expectedCommandLineElements.add(
+            String.format("--eviction-heap-percentage=%1$s", serverLauncher.getEvictionHeapPercentage()));
+
+    for (String commandLineElement : commandLineElements) {
+      expectedCommandLineElements.remove(commandLineElement.toLowerCase());
+    }
+
+    assertTrue(String.format("Expected ([]); but was (%1$s)", expectedCommandLineElements),
+            expectedCommandLineElements.isEmpty());
+  }
+
 }

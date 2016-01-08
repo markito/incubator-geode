@@ -16,16 +16,11 @@
  */
 package com.gemstone.gemfire.distributed;
 
-import static com.googlecode.catchexception.apis.BDDCatchException.caughtException;
-import static com.googlecode.catchexception.apis.BDDCatchException.when;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.BDDAssertions.*;
-
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileWriter;
-import java.net.InetAddress;
-import java.util.Properties;
+import com.gemstone.gemfire.distributed.ServerLauncher.Builder;
+import com.gemstone.gemfire.distributed.ServerLauncher.Command;
+import com.gemstone.gemfire.distributed.internal.DistributionConfig;
+import com.gemstone.gemfire.internal.i18n.LocalizedStrings;
+import com.gemstone.gemfire.test.junit.categories.IntegrationTest;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -34,11 +29,16 @@ import org.junit.experimental.categories.Category;
 import org.junit.rules.TemporaryFolder;
 import org.junit.rules.TestName;
 
-import com.gemstone.gemfire.distributed.ServerLauncher.Builder;
-import com.gemstone.gemfire.distributed.ServerLauncher.Command;
-import com.gemstone.gemfire.distributed.internal.DistributionConfig;
-import com.gemstone.gemfire.internal.i18n.LocalizedStrings;
-import com.gemstone.gemfire.test.junit.categories.IntegrationTest;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileWriter;
+import java.net.InetAddress;
+import java.util.Properties;
+
+import static com.googlecode.catchexception.apis.BDDCatchException.caughtException;
+import static com.googlecode.catchexception.apis.BDDCatchException.when;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.BDDAssertions.then;
 
 /**
  * Integration tests for ServerLauncher class. These tests may require file system and/or network I/O.
@@ -101,6 +101,48 @@ public class ServerLauncherIntegrationJUnitTest {
     assertThat(launcher.getMessageTimeToLive().intValue()).isEqualTo(120000);
     assertThat(launcher.getSocketBufferSize().intValue()).isEqualTo(32768);
   }
+
+  @Test
+  public void testBuilderParseArgumentsWithRandomNameAndWithValuesSeparatedWithCommas() throws Exception {
+    // given a new builder and a directory
+    String rootFolder = this.temporaryFolder.getRoot().getCanonicalPath();
+    Builder builder = new Builder();
+    MemberNameGenerator memberNameGenerator = new GemsMemberNameGenerator();
+    String name = memberNameGenerator.generate();
+
+    // when: parsing many arguments
+    builder.parseArguments(
+            "start",
+            name,
+            "--assign-buckets",
+            "--disable-default-server",
+            "--debug",
+            "--force",
+            "--rebalance",
+            "--redirect-output",
+            "--dir", rootFolder,
+            "--pid", "1234",
+            "--server-bind-address", InetAddress.getLocalHost().getHostAddress(),
+            "--server-port", "11235",
+            "--hostname-for-clients", "192.168.99.100");
+
+    // then: the getters should return properly parsed values
+    assertThat(builder.getCommand()).isEqualTo(Command.START);
+    assertThat(builder.getMemberName()).isEqualTo(name);
+    assertThat(builder.getHostNameForClients()).isEqualTo("192.168.99.100");
+    assertThat(builder.getAssignBuckets()).isTrue();
+    assertThat(builder.getDisableDefaultServer()).isTrue();
+    assertThat(builder.getDebug()).isTrue();
+    assertThat(builder.getForce()).isTrue();
+    assertThat(builder.getHelp()).isFalse();
+    assertThat(builder.getRebalance()).isTrue();
+    assertThat(builder.getRedirectOutput()).isTrue();
+    assertThat(builder.getWorkingDirectory()).isEqualTo(rootFolder);
+    assertThat(builder.getPid().intValue()).isEqualTo(1234);
+    assertThat(builder.getServerBindAddress()).isEqualTo(InetAddress.getLocalHost());
+    assertThat(builder.getServerPort().intValue()).isEqualTo(11235);
+  }
+
 
   @Test
   public void testBuilderParseArgumentsWithValuesSeparatedWithCommas() throws Exception {

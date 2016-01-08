@@ -17,33 +17,11 @@
 
 package com.gemstone.gemfire.distributed;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.lang.management.ManagementFactory;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.TreeMap;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
-
-import javax.management.MalformedObjectNameException;
-import javax.management.ObjectName;
-
 import com.gemstone.gemfire.SystemFailure;
 import com.gemstone.gemfire.cache.Cache;
 import com.gemstone.gemfire.cache.CacheFactory;
 import com.gemstone.gemfire.cache.partition.PartitionRegionHelper;
 import com.gemstone.gemfire.cache.server.CacheServer;
-import com.gemstone.gemfire.distributed.AbstractLauncher.Status;
 import com.gemstone.gemfire.distributed.internal.DistributionConfig;
 import com.gemstone.gemfire.distributed.internal.InternalDistributedSystem;
 import com.gemstone.gemfire.internal.GemFireVersion;
@@ -80,11 +58,32 @@ import com.gemstone.gemfire.management.internal.cli.json.GfJsonException;
 import com.gemstone.gemfire.management.internal.cli.json.GfJsonObject;
 import com.gemstone.gemfire.pdx.PdxSerializer;
 
+import org.springframework.data.gemfire.support.SpringContextBootstrappingInitializer;
+
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.lang.management.ManagementFactory;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.TreeMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+
+import javax.management.MalformedObjectNameException;
+import javax.management.ObjectName;
+
 import joptsimple.OptionException;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
-
-import org.springframework.data.gemfire.support.SpringContextBootstrappingInitializer;
 
 /**
  * The ServerLauncher class is a launcher class with main method to start a GemFire Server (implying a GemFire Cache
@@ -257,7 +256,16 @@ public final class ServerLauncher extends AbstractLauncher<String> {
     this.force = Boolean.TRUE.equals(builder.getForce());
     this.help = Boolean.TRUE.equals(builder.getHelp());
     this.hostNameForClients = builder.getHostNameForClients();
-    this.memberName = builder.getMemberName();
+
+
+    if (StringUtils.isBlank(builder.getMemberName()) &&
+            (StringUtils.isBlank(System.getProperty(DistributionConfig.GEMFIRE_PREFIX + DistributionConfig.NAME_NAME) )) &&
+            (StringUtils.isBlank(this.distributedSystemProperties.getProperty(DistributionConfig.NAME_NAME) ))  ) {
+      this.memberName = builder.getMemberNameGenerator().generate();
+    } else {
+      this.memberName = builder.getMemberName();
+    }
+
     // TODO:KIRK: set ThreadLocal for LogService with getLogFile or getLogFileName
     this.pid = builder.getPid();
     this.rebalance = Boolean.TRUE.equals(builder.getRebalance());
@@ -1405,6 +1413,7 @@ public final class ServerLauncher extends AbstractLauncher<String> {
     private Integer messageTimeToLive;
     private Integer socketBufferSize;
     private Integer maxThreads;
+    private MemberNameGenerator memberNameGenerator = new GemsMemberNameGenerator();
 
     /**
      * Default constructor used to create an instance of the Builder class for programmatical access.
@@ -1459,6 +1468,7 @@ public final class ServerLauncher extends AbstractLauncher<String> {
       return parser;
     }
 
+
     /**
      * Parses the list of arguments to configure this Builder with the intent of constructing a Server launcher to
      * invoke a Cache Server.  This method is called to parse the arguments specified by the user on the command-line.
@@ -1470,6 +1480,7 @@ public final class ServerLauncher extends AbstractLauncher<String> {
         OptionSet options = getParser().parse(args);
 
         parseCommand(args);
+
         parseMemberName(args); // TODO:KIRK: need to get the name to LogService for log file name
 
         setAssignBuckets(options.has("assign-buckets"));
@@ -2283,14 +2294,15 @@ public final class ServerLauncher extends AbstractLauncher<String> {
      */
     protected void validateOnStart() {
       if (Command.START.equals(getCommand())) {
-        if (StringUtils.isBlank(getMemberName())
-          && !isSet(System.getProperties(), DistributionConfig.GEMFIRE_PREFIX + DistributionConfig.NAME_NAME)
-          && !isSet(getDistributedSystemProperties(), DistributionConfig.NAME_NAME)
-          && !isSet(loadGemFireProperties(DistributedSystem.getPropertyFileURL()), DistributionConfig.NAME_NAME))
-        {
-          throw new IllegalStateException(LocalizedStrings.Launcher_Builder_MEMBER_NAME_VALIDATION_ERROR_MESSAGE
-            .toLocalizedString("Server"));
-        }
+        // TODO: add a system property to check here or do he validation later
+//        if (StringUtils.isBlank(getMemberName())
+//          && !isSet(System.getProperties(), DistributionConfig.GEMFIRE_PREFIX + DistributionConfig.NAME_NAME)
+//          && !isSet(getDistributedSystemProperties(), DistributionConfig.NAME_NAME)
+//          && !isSet(loadGemFireProperties(DistributedSystem.getPropertyFileURL()), DistributionConfig.NAME_NAME))
+//        {
+//          throw new IllegalStateException(LocalizedStrings.Launcher_Builder_MEMBER_NAME_VALIDATION_ERROR_MESSAGE
+//            .toLocalizedString("Server"));
+//        }
 
         if (!SystemUtils.CURRENT_DIRECTORY.equals(getWorkingDirectory())) {
           throw new IllegalStateException(LocalizedStrings.Launcher_Builder_WORKING_DIRECTORY_OPTION_NOT_VALID_ERROR_MESSAGE
@@ -2332,6 +2344,14 @@ public final class ServerLauncher extends AbstractLauncher<String> {
     public ServerLauncher build() {
       validate();
       return new ServerLauncher(this);
+    }
+
+    public MemberNameGenerator getMemberNameGenerator() {
+      return memberNameGenerator;
+    }
+
+    public void setMemberNameGenerator(MemberNameGenerator memberNameGenerator) {
+      this.memberNameGenerator = memberNameGenerator;
     }
   }
 

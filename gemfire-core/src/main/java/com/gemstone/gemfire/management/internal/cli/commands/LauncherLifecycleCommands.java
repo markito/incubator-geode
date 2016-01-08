@@ -16,51 +16,16 @@
  */
 package com.gemstone.gemfire.management.internal.cli.commands;
 
-import java.awt.Desktop;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileFilter;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.InetAddress;
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.UnknownHostException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.EmptyStackException;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
-import java.util.Stack;
-import java.util.TreeSet;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
-
-import javax.management.MalformedObjectNameException;
-import javax.management.ObjectName;
-import javax.management.Query;
-import javax.management.QueryExp;
-import javax.net.ssl.SSLException;
-import javax.net.ssl.SSLHandshakeException;
-
 import com.gemstone.gemfire.GemFireException;
 import com.gemstone.gemfire.SystemFailure;
 import com.gemstone.gemfire.cache.server.CacheServer;
 import com.gemstone.gemfire.distributed.AbstractLauncher;
 import com.gemstone.gemfire.distributed.AbstractLauncher.ServiceState;
 import com.gemstone.gemfire.distributed.AbstractLauncher.Status;
+import com.gemstone.gemfire.distributed.GemsMemberNameGenerator;
 import com.gemstone.gemfire.distributed.LocatorLauncher;
 import com.gemstone.gemfire.distributed.LocatorLauncher.LocatorState;
+import com.gemstone.gemfire.distributed.MemberNameGenerator;
 import com.gemstone.gemfire.distributed.ServerLauncher;
 import com.gemstone.gemfire.distributed.ServerLauncher.ServerState;
 import com.gemstone.gemfire.distributed.internal.DistributionConfig;
@@ -76,7 +41,6 @@ import com.gemstone.gemfire.internal.lang.ObjectUtils;
 import com.gemstone.gemfire.internal.lang.StringUtils;
 import com.gemstone.gemfire.internal.lang.SystemUtils;
 import com.gemstone.gemfire.internal.process.ClusterConfigurationNotAvailableException;
-import com.gemstone.gemfire.internal.process.NonBlockingProcessStreamReader;
 import com.gemstone.gemfire.internal.process.ProcessLauncherContext;
 import com.gemstone.gemfire.internal.process.ProcessStreamReader;
 import com.gemstone.gemfire.internal.process.ProcessStreamReader.InputListener;
@@ -112,12 +76,47 @@ import com.gemstone.gemfire.management.internal.cli.util.VisualVmNotFoundExcepti
 import com.gemstone.gemfire.management.internal.configuration.domain.SharedConfigurationStatus;
 import com.gemstone.gemfire.management.internal.configuration.messages.SharedConfigurationStatusRequest;
 import com.gemstone.gemfire.management.internal.configuration.messages.SharedConfigurationStatusResponse;
-import com.sun.tools.attach.VirtualMachine;
-import com.sun.tools.attach.VirtualMachineDescriptor;
 
 import org.springframework.shell.core.annotation.CliAvailabilityIndicator;
 import org.springframework.shell.core.annotation.CliCommand;
 import org.springframework.shell.core.annotation.CliOption;
+
+import java.awt.*;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileFilter;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.InetAddress;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.EmptyStackException;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+import java.util.Stack;
+import java.util.TreeSet;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+
+import javax.management.MalformedObjectNameException;
+import javax.management.ObjectName;
+import javax.management.Query;
+import javax.management.QueryExp;
+import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLHandshakeException;
 
 /**
  * The LauncherLifecycleCommands class encapsulates all GemFire launcher commands for GemFire tools (like starting
@@ -184,6 +183,13 @@ public class LauncherLifecycleCommands extends AbstractCommandsSupport {
     springJarNamePrefixes.add(SPRING_TX_JAR_NAME_PREFIX);
 
     SPRING_JAR_NAME_PREFIXES = Collections.unmodifiableSet(springJarNamePrefixes);
+  }
+
+  private MemberNameGenerator memberNameGenerator;
+
+  public LauncherLifecycleCommands() {
+    super();
+    setMemberNameGenerator(new GemsMemberNameGenerator());
   }
 
   protected static boolean isAttachApiAvailable() {
@@ -1529,10 +1535,10 @@ public class LauncherLifecycleCommands extends AbstractCommandsSupport {
                                        help = CliStrings.START_SERVER__MESSAGE__TIME__TO__LIVE__HELP)
                             final Integer messageTimeToLive,
                             @CliOption(key = CliStrings.START_SERVER__NAME,
-                                       mandatory = true,
+                                       mandatory = false,
                                        unspecifiedDefaultValue = CliMetaData.ANNOTATION_NULL_VALUE,
                                        help = CliStrings.START_SERVER__NAME__HELP)
-                            final String memberName,
+                            final String providedMemberName,
                             @CliOption(key = CliStrings.START_SERVER__OFF_HEAP_MEMORY_SIZE,
                                        unspecifiedDefaultValue = CliMetaData.ANNOTATION_NULL_VALUE,
                                        help = CliStrings.START_SERVER__OFF_HEAP_MEMORY_SIZE__HELP)
@@ -1579,6 +1585,8 @@ public class LauncherLifecycleCommands extends AbstractCommandsSupport {
                             final Boolean requestSharedConfiguration)
                             // NOTICE: keep the parameters in alphabetical order based on their CliStrings.START_SERVER_* text
   {
+
+    final String memberName = StringUtils.isBlank(providedMemberName) ? new GemsMemberNameGenerator().generate() : providedMemberName;
 
     try {
       if (workingDirectory == null) {
@@ -1838,6 +1846,8 @@ public class LauncherLifecycleCommands extends AbstractCommandsSupport {
 
     if (!StringUtils.isBlank(launcher.getMemberName())) {
       commandLine.add(launcher.getMemberName());
+    } else if (getMemberNameGenerator() != null) {
+      commandLine.add(getMemberNameGenerator().generate());
     }
 
     if (launcher.isAssignBuckets()) {
@@ -2766,6 +2776,14 @@ public class LauncherLifecycleCommands extends AbstractCommandsSupport {
     CliStrings.START_MANAGER, CliStrings.START_PULSE, CliStrings.START_VSD, CliStrings.START_DATABROWSER})
   public boolean launcherCommandsAvailable() {
     return true;
+  }
+
+  public MemberNameGenerator getMemberNameGenerator() {
+    return memberNameGenerator;
+  }
+
+  public void setMemberNameGenerator(MemberNameGenerator memberNameGenerator) {
+    this.memberNameGenerator = memberNameGenerator;
   }
 
   protected static final class LauncherSignalListener implements SignalListener {

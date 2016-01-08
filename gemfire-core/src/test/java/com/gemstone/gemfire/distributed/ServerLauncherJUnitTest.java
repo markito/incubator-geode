@@ -51,6 +51,9 @@ import org.junit.Test;
 import org.junit.contrib.java.lang.system.RestoreSystemProperties;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
+import org.mockito.verification.VerificationMode;
+
+import static org.mockito.Mockito.*;
 
 /**
  * The ServerLauncherJUnitTest class is a test suite of unit tests testing the contract, functionality and invariants
@@ -171,6 +174,15 @@ public class ServerLauncherJUnitTest {
     assertEquals("serverOne", builder.getMemberName());
     assertSame(builder, builder.setMemberName(null));
     assertNull(builder.getMemberName());
+  }
+
+  @Test
+  public void testGetRandomMemberName() {
+    Builder builder = new Builder();
+
+    assertNull(builder.getMemberName());
+    assertNotNull(builder.getMemberNameGenerator());
+    assertNotSame(builder.getMemberNameGenerator().generate(),builder.getMemberNameGenerator().generate());
   }
 
   @Test(expected = IllegalArgumentException.class)
@@ -510,17 +522,17 @@ public class ServerLauncherJUnitTest {
     assertNull(launcher.getMemberName());
   }
 
-  @Test(expected = IllegalStateException.class)
-  public void testBuildNoMemberNameOnStart() {
-    try {
-      new Builder().setCommand(Command.START).build();
-    }
-    catch (IllegalStateException expected) {
-      assertEquals(LocalizedStrings.Launcher_Builder_MEMBER_NAME_VALIDATION_ERROR_MESSAGE.toLocalizedString("Server"),
-        expected.getMessage());
-      throw expected;
-    }
-  }
+//  @Test(expected = IllegalStateException.class)
+//  public void testBuildNoMemberNameOnStart() {
+//    try {
+//      new Builder().setCommand(Command.START).build();
+//    }
+//    catch (IllegalStateException expected) {
+//      assertEquals(LocalizedStrings.Launcher_Builder_MEMBER_NAME_VALIDATION_ERROR_MESSAGE.toLocalizedString("Server"),
+//        expected.getMessage());
+//      throw expected;
+//    }
+//  }
 
   @Test
   public void testIsServing() {

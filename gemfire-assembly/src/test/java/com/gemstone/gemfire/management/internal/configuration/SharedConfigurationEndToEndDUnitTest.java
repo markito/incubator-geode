@@ -21,6 +21,7 @@ import com.gemstone.gemfire.cache.CacheFactory;
 import com.gemstone.gemfire.cache.RegionShortcut;
 import com.gemstone.gemfire.cache.wan.GatewaySender.OrderPolicy;
 import com.gemstone.gemfire.distributed.Locator;
+import com.gemstone.gemfire.distributed.MemberNameGenerator;
 import com.gemstone.gemfire.distributed.internal.DistributionConfig;
 import com.gemstone.gemfire.distributed.internal.InternalLocator;
 import com.gemstone.gemfire.internal.AvailablePortHelper;
@@ -37,10 +38,7 @@ import com.gemstone.gemfire.management.internal.cli.commands.CliCommandTestBase;
 import com.gemstone.gemfire.management.internal.cli.i18n.CliStrings;
 import com.gemstone.gemfire.management.internal.cli.result.CommandResult;
 import com.gemstone.gemfire.management.internal.cli.util.CommandStringBuilder;
-import dunit.DistributedTestCase;
-import dunit.Host;
-import dunit.SerializableCallable;
-import dunit.VM;
+
 import org.apache.commons.io.FileUtils;
 
 import java.io.File;
@@ -51,6 +49,12 @@ import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ThreadLocalRandom;
+
+import dunit.DistributedTestCase;
+import dunit.Host;
+import dunit.SerializableCallable;
+import dunit.VM;
 
 public class SharedConfigurationEndToEndDUnitTest extends CliCommandTestBase {
   private static final int TIMEOUT = 10000;
@@ -62,6 +66,25 @@ public class SharedConfigurationEndToEndDUnitTest extends CliCommandTestBase {
   public static Set<String> serverNames = new HashSet<String>();
   public static Set<String> jarFileNames = new HashSet<String>();
 
+  public static ThreadLocalRandom random = ThreadLocalRandom.current();
+
+  // mocked nameGenerator
+  public MemberNameGenerator testMemberNameGenerator = new MemberNameGenerator() {
+
+    private Set<String> names = new HashSet<>();
+
+    @Override
+    public String generate() {
+      String name = "server-" + random.nextInt(10);
+      names.add(name);
+      return name;
+    }
+
+    public Set<String> listOfNames () {
+      return names;
+    }
+  };
+
   public SharedConfigurationEndToEndDUnitTest(String name) {
     super(name);
     // TODO Auto-generated constructor stub
@@ -69,15 +92,20 @@ public class SharedConfigurationEndToEndDUnitTest extends CliCommandTestBase {
 
   private static final long serialVersionUID = -2276690105585944041L;
 
+  public Set<String> startServers(HeadlessGfsh gfsh, String locatorString, int numServers, int startNum) throws ClassNotFoundException, IOException {
+    return startServers(gfsh, locatorString,numServers,null,startNum);
+  }
+
   public Set<String> startServers(HeadlessGfsh gfsh, String locatorString, int numServers, String serverNamePrefix, int startNum) throws ClassNotFoundException, IOException {
     Set<String> serverNames = new HashSet<String>();
 
     final int[] serverPorts = AvailablePortHelper.getRandomAvailableTCPPorts(numServers);
     for (int i=0; i<numServers; i++) {
       int port = serverPorts[i];
+
       String serverName = serverNamePrefix+ Integer.toString(i+startNum) + "-" + port;
       CommandStringBuilder csb = new CommandStringBuilder(CliStrings.START_SERVER);
-      csb.addOption(CliStrings.START_SERVER__NAME, serverName);
+//      csb.addOption(CliStrings.START_SERVER__NAME, serverName);
       csb.addOption(CliStrings.START_SERVER__LOCATORS, locatorString);
       csb.addOption(CliStrings.START_SERVER__SERVER_PORT, Integer.toString(port));
       CommandResult cmdResult = executeCommand(gfsh, csb.getCommandString());
@@ -106,8 +134,33 @@ public class SharedConfigurationEndToEndDUnitTest extends CliCommandTestBase {
     verifyRegionCreateOnAllMembers(REGION2);
     verifyIndexCreationOnAllMembers(INDEX1);
     verifyAsyncEventQueueCreation();
-   
 
+    //shutdown everything
+    getLogWriter().info("Shutting down all the members");
+    shutdownAll();
+    deleteSavedJarFiles();
+  }
+
+  public void testStartServerWithRandomNameAndExecuteCommands() throws InterruptedException, ClassNotFoundException, IOException, ExecutionException {
+    addExpectedException("EntryDestroyedException");
+    Object[] result = setup();
+    final int locatorPort = (Integer) result[0];
+    final String jmxHost = (String) result[1];
+    final int jmxPort = (Integer) result[2];
+    final int httpPort = (Integer) result[3];
+    final String locatorString = "localHost[" + locatorPort + "]";
+
+    final HeadlessGfsh gfsh = new HeadlessGfsh("gfsh2", 300);
+    assertNotNull(gfsh);
+    shellConnect(jmxHost, jmxPort, httpPort, gfsh);
+
+    serverNames.addAll(startServers(gfsh, locatorString, 2, 1));
+    doCreateCommands();
+    serverNames.addAll(startServers(gfsh, locatorString, 1, 4));
+    verifyRegionCreateOnAllMembers(REGION1);
+    verifyRegionCreateOnAllMembers(REGION2);
+    verifyIndexCreationOnAllMembers(INDEX1);
+    verifyAsyncEventQueueCreation();
 
     //shutdown everything
     getLogWriter().info("Shutting down all the members");
